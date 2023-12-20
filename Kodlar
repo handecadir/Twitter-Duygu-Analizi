@@ -1,0 +1,190 @@
+title: "örnek"
+output: html_document
+date: "2023-12-18"
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r}
+#analiz için gerekli kütüphanelerin çalıştırılması aşağıda görmüş olduğunuz kütüphaneler çalıştırılacaktır. Eğer kütüphanenizde bulunmuyorsa paketleri indirmeniz gerekmektedir. R markdown 
+library(tidyverse)
+library(tidytext)
+library(syuzhet)
+library(readxl)
+library(wordcloud)
+library(ggplot2)
+library(tm)
+library(quanteda)
+library(openxlsx)
+library(topicmodels)
+library(reshape2)
+
+```
+
+
+```{r}
+# Duygu analizi fonksiyonunu çalıştırıyoruz
+perform_sentiment_analysis <- function(tweets) {
+  # Verilerin düzeltilmesi
+  tweets <- data.frame(text = tweets)
+  
+  # Duygu analizi için tidytext kullanılması
+  tweets_tidy <- tweets %>%
+    unnest_tokens(word, text) %>%
+    left_join(get_sentiments("bing"), by = "word") %>%
+    count(word, sentiment, sort = TRUE) %>%
+    spread(sentiment, n, fill = 0) %>%
+    mutate(sentiment_score = positive - negative) %>%
+    # Elle sentiment sütununu eklenmesi
+    mutate(sentiment = ifelse(sentiment_score > 0, "positive", ifelse(sentiment_score < 0, "negative", "neutral")))
+  
+  # Syuzhet paketi ile duygu analizi yapılması
+  sentiment_scores <- get_nrc_sentiment(tweets$text)
+  
+  # Veriyi birleştirmesi
+  result <- list(tweets_tidy = tweets_tidy, sentiment_scores = sentiment_scores)
+  
+  return(result)
+}
+
+# Excel dosyasından veriyi okunması burada 
+excel_file_path <- "buraya dosyanız nerede bulunuyorsa onu yazın örnek C:/Users/HANDE/Desktop/hande .xlsx"
+df <- read_excel(excel_file_path)
+
+# Veriyi düzenlemesi
+tweets <- data.frame(text = df$Tweet)
+
+# Duygu analizi yapılması
+result <- perform_sentiment_analysis(tweets$text)
+```
+
+```{r}
+# tweets_tidy ve sentiment_scores veri çerçevelerini görüntülenmesi 
+View(result$tweets_tidy)
+View(result$sentiment_scores)
+# Görselleştirme tıff formatında 1280 720 kullanılmıştır
+ggplot(result$tweets_tidy, aes(x = word, y = sentiment_score, fill = sentiment)) +
+  geom_bar(stat = "identity", position = "identity") +
+  labs(title = "Duygu Analizi Sonuçları", x = "Kelime", y = "Duygu Skoru") +
+  theme_minimal()
+# tweets_tidy veri çerçevesini Excel'e kaydet
+write.xlsx(result$tweets_tidy, "tweets_tidy.xlsx", row.names = FALSE)
+
+# sentiment_scores veri çerçevesini Excel'e kaydet
+write.xlsx(result$sentiment_scores, "sentiment_scores_tr.xlsx", rowNames = FALSE)
+```
+
+
+
+```{r}
+# En yüksek pozitif duygu skorlarına sahip kelimelerin bulunması 
+top_positive_words <- head(result$tweets_tidy[order(result$tweets_tidy$positive, decreasing = TRUE), ], 10)
+
+# En yüksek negatif duygu skorlarına sahip kelimeler
+top_negative_words <- head(result$tweets_tidy[order(result$tweets_tidy$negative, decreasing = TRUE), ], 10)
+
+# Top 10 pozitif kelimelerin görselleştirilmesi
+ggplot(top_positive_words, aes(x = reorder(word, positive), y = positive)) +
+  geom_bar(stat = "identity", fill = "skyblue", color = "black") +
+  labs(title = "En Yüksek Pozitif Duygu Skorlarına Sahip Kelimeler",
+       x = "Kelime", y = "Pozitif Duygu Skoru") +
+  theme_minimal() +
+  coord_flip()  
+# Top 10 negatif kelimelerin görselleştirilmesi
+ggplot(top_negative_words, aes(x = reorder(word, negative), y = negative)) +
+  geom_bar(stat = "identity", fill = "salmon", color = "black") +
+  labs(title = "En Yüksek Negatif Duygu Skorlarına Sahip Kelimeler",
+       x = "Kelime", y = "Negatif Duygu Skoru") +
+  theme_minimal() +
+  coord_flip()  
+```
+
+
+
+```{r}
+# Kelime bulutu oluşturma burada hem negatif hem de pozitif duygu bulutları oluşturuluyor
+
+
+# Pozitif kelimeler
+par(mar = c(1, 1, 1, 1))
+wordcloud(words = result$tweets_tidy$word[result$tweets_tidy$sentiment_score > 0],
+          freq = result$tweets_tidy$positive[result$tweets_tidy$sentiment_score > 0],
+          scale = c(3, 0.5), min.freq = 1, colors = brewer.pal(8, "Dark2"))
+
+# Negatif kelimeler
+par(mar = c(1, 1, 1, 1)) 
+wordcloud(words = result$tweets_tidy$word[result$tweets_tidy$sentiment_score < 0],
+          freq = result$tweets_tidy$negative[result$tweets_tidy$sentiment_score < 0],
+          scale = c(3, 0.5), min.freq = 1, colors = brewer.pal(8, "Dark2"))
+```
+
+
+```{r}
+#tarihe göre duygu değişimleri
+library(lubridate)
+
+
+veri <- data.frame(
+  Date = c("Dec 26th 2019","Dec 4th 2019", "Nov 6th 2019", "Oct 25th 2019", "Oct 24th 2019","Oct 23rd 2019",
+           "Oct 22nd 2019", "Oct 18th 2019", "Oct 18th 2019","Oct 18th 2019","Oct 17th 2019","Oct 14th 2019" 
+          buraya hangi tarihler arasında istiyorsanız elinizdeki dosyada kaç tane tarih varsa tek tek yazmanız gerekmektedir.),
+  Pozitif = sample(10:30, 51 buraya kaç tweet varsa onun sayısını yazıyorsunuz unutmayın yukarıya bir açıklama yapmışsanız Excelde onu kullanmayacaksınız, replace = TRUE),
+  Negatif = sample(5:15, 51 yukarıdaki gibi , replace = TRUE),
+  Nötr = sample(8:20, 51 yukarıdaki gibi, replace = TRUE)
+)
+
+# Tarih sütununu çözümleme
+veri$Date <- lubridate::mdy(veri$Date)
+
+# Veri çerçevesini düzenle
+veri_long <- veri %>%
+  gather(key = "Sentiment", value = "Count", -Date)
+
+# Sentiment sütununu faktöre çevir
+veri_long$Sentiment <- factor(veri_long$Sentiment, levels = c("Negatif", "Nötr", "Pozitif"))
+
+# Bar grafik oluştur
+ggplot(veri_long, aes(x = Date, y = Count, fill = Sentiment)) +
+  geom_bar(stat = "identity", position = "stack") +
+  scale_fill_manual(values = c("Pozitif" = "blue", "Negatif" = "red", "Nötr" = "green")) +
+  labs(title = "Duygu Sınıflarının Zaman İçindeki Değişimi", y = "Tweet Sayısı") +
+  theme_minimal()
+```
+
+```{r}
+
+# Örnek metin veri seti
+text_data <- tweets$text
+
+# Corpus oluşturma
+corpus <- Corpus(VectorSource(text_data))
+
+# Metin madenciliği ön işleme
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+
+# Belge terim matrisi oluşturma
+dtm_matrix <- DocumentTermMatrix(corpus)
+
+# Konu modeli oluşturma
+lda_model <- LDA(dtm_matrix, k = 5)  # Örneğin, 5 konu için ayarlandı
+
+# Konuları gösterme
+topics(lda_model)
+
+# Belge-konu dağılımını elde etme
+doc_topic_dist <- as.data.frame(tidy(lda_model, matrix = "beta"))
+
+# Konuların en belirgin kelimelerini gösterme
+top_terms <- terms(lda_model, 10)
+
+# Veri çerçevesi oluşturma
+top_terms_df <- as.data.frame(top_terms)
+
+# Excel dosyasını oluşturma ve veriyi ekleme
+write.xlsx(top_terms_df, file = "top_terms_hande.xlsx")
+
+```
